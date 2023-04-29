@@ -1,0 +1,17 @@
+%%  Explanation
+%   
+%   By Wonbum Sohn
+%   Ver. April-18th-2023
+%   For preprocessing of ABIDE dataset in Ubuntu
+%   Reorientation -> Realignment -> Framewise displacement -> Skull strip -> Coregistration ->
+%   Segmentation & Dartel -> 
+
+%   
+%   temporal regression
+%   normalization
+%   smoothing
+%   filtering
+%   Cut time
+
+%%  Initialization
+clear; clc; spm quit ;
