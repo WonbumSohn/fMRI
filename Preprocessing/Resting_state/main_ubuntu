@@ -15,3 +15,182 @@
 
 %%  Initialization
 clear; clc; spm quit ;
+
+%%  Setting File Location (Should check these variables every time)
+%   Path of experiment folder
+script_basic_path = '/mnt/e/USE/001_Mine/002_ASD/Scripts/Ubuntu/' ;
+data_basic_path = '/mnt/e/USE/001_Mine/002_ASD/Data/' ;
+selected_path = '001_ABIDE_I/NYU_Langone_Medical_Center/' ;
+age_path = 'Children' ; % Children, Adolescents, Adults
+work_basic_path = [data_basic_path selected_path age_path '/'] ;
+
+%   Select group
+exp_grp = 'ASD' ;               %   Disorder group folder name
+typ_grp = 'TC' ;                %   Typical group folder name
+now_grp_path = [work_basic_path exp_grp '/'] ;      %   ASD folder
+% now_grp_path = [work_basic_path typ_grp '/'] ;      %   TC folder
+
+%   Set common name of all subjects folder
+common_subj_name = '5' ;
+common_sess_name = 'session_' ;
+
+%   Set functional and anatomical data folder name
+func_folder_name = 'func' ;
+anat_folder_name = 'anat' ;
+
+%   Set functional and anatomical data basic file name
+func_data_name = 'rest' ;       %   Funcational data name
+anat_data_name = 'mprage' ;     %   Anatomical data name
+
+%   TR time(ms) (Should check separately by using AFNI(3dinfo))
+TR_value = 2 ;
+
+%   Basic SPM12 location
+spm_location = '/mnt/c/Users/sohnw/Use/For_MATLAB/spm12/tpm/' ;
+
+%%  Automatically define them by the above setted variables
+%   Canonical space
+adults_tpm = [spm_location 'TPM.nii,'] ;
+child_adole_tpm = [spm_location 'nihpd_asym_04.5-18.5_nifti/'] ;
+% child_adole_tpm = [spm_location 'nihpd_sym_04.5-18.5_nifti/'] ;
+tpm_basic_name = 'nihpd_asym_04.5-18.5_' ;
+% tpm_basic_name = 'nihpd_sym_04.5-18.5_' ;
+
+%   Calculate cut time
+% cut_time = ceil(10 / TR_value) ;
+cut_time = 0 ;
+
+%   Make list of subject folders
+cd(now_grp_path) ;
+subj_list = dir(['*' common_subj_name '*']) ;
+
+%%  01. Unzip from .nii.gz to .nii
+
+%   Run this step
+run([script_basic_path 'U_Unzip_gz_files.m'])
+
+%%  02_1. Reorient the T1 images (manual)
+cd(now_grp_path) ;
+spm fmri
+
+%%  02_2. End spm
+spm quit
+
+%%  03. Realignment
+
+%   Set common input file name since the input name is different when doing this step.
+input_prefix = '' ;
+%   Set common output file name.
+output_prefix = 'r' ;
+
+%   Run this step
+run([script_basic_path 'U_Realignment.m'])
+
+%%  04. Head Motion Assessment using Framewise Displacement.
+
+%   Set common input file name since the input name is different when doing this step.
+input_prefix = 'rp_' ;
+
+%   Run this step
+run([script_basic_path 'U_Framewise_Displacement.m'])
+
+%%  05. Reload subj_list made by the framewize displacement
+%   Move to now group locations (Ex. ASD or TC)
+cd(now_grp_path) ;
+%   Load new subjects and sessions list after the framewize displacement.
+total_lists = load('adjusted_subj_lists.mat', 'total_lists') ;
+total_lists = total_lists.total_lists ;
+%   Save the subjects list separately.
+subj_list = cell2struct(total_lists(:, 1), {'name'}, 2) ;
+%
+fprintf(2, '<<<<<<<<<< Finished Reload the adjusted subject lists >>>>>>>>>>\n') ;
+
+%% 06. Skull strip
+
+%   Set common input file name since the input name is different when doing this step.
+input_prefix = '' ;
+%   Set common output file name.
+output_prefix = 'ss_' ;
+
+%   Run this step
+run([script_basic_path 'U_Skull_Strip.m'])
+
+%%  06-2. Skull strip of mean func (When using this, should update U_Skull_Strip_func.m file!!!!!!)
+
+% %   Set common input file name since the input name is different when doing this step.
+% input_prefix = 'meanc_' ;
+% %   Set common output file name.
+% output_prefix = 'ss_' ;
+% 
+% %   Run this step
+% run([script_basic_path 'U_Skull_Strip_func.m'])
+
+%%  06_3. Check Skull Strip
+cd(now_grp_path) ;
+spm fmri
+
+%%  06_3. End spm
+spm quit
+
+%%  07_1. Coregistration
+
+%   Set common input file name since the input name is different when doing this step.
+func_input_prefix = 'r' ;             %   Functional data
+source_input_prefix = 'mean' ;        %   Source data
+% source_input_prefix = 'ss_mean' ;
+anat_input_prefix = 'ss_' ;           %   Anatomical data
+% %   Set common output file name.
+% output_prefix = 'cor_' ;
+
+%   Run this step
+run([script_basic_path 'U_Coregistration.m'])
+
+%%  07_2. Check coregistration
+cd(now_grp_path) ;
+spm fmri
+
+%%  07_2. End spm
+spm quit
+
+%%  08_1. Segmentation
+
+%   Set common input file name since the input name is different when doing this step.
+input_prefix = '' ;     % Ex. 'ss_'
+
+%   Depending an age group, we would need different canonical image for the segmentation.
+if strcmp(age_path, 'Children') | strcmp(age_path, 'Adolescents')   %   Children or adolescents
+    fprintf(2, 'Children or adolescents segmentation (%s).\n', age_path)
+%     run([script_basic_path 'Segmentation_children.m'])
+    run([script_basic_path 'U_Segmentation.m'])
+elseif strcmp(age_path, 'Adults')                                   %   Adults
+    fprintf(2, 'Adults segmentation (%s).\n', age_path)
+    run([script_basic_path 'U_Segmentation.m'])
+end
+
+%%  08_2. Check Segmentation
+cd(now_grp_path) ;
+spm fmri
+
+%%  08_3. End spm
+spm quit
+
+%%  08_4. Dartel (First Pass, Need to check this step!!!!)
+%   Set mask type wanted
+maks_type = 'GM' ; % GM, WM, CSF
+%   Set common input file name since the input name is different when doing this step.
+input_prefix = '' ;
+
+%   Dartel method will be used when children and adolescents data.
+if strcmp(age_path, 'Children') | strcmp(age_path, 'Adolescents')
+    run([script_basic_path 'U_Dartel_' maks_type '.m'])
+end 
+
+%%  08_5. Check Dartel
+cd(now_grp_path) ;
+spm fmri
+
+%%  08_6. End spm
+spm quit
+
+
+
